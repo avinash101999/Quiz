@@ -3,21 +3,714 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Comprehensive Quiz App</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Quiz Master Ultimate</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Firebase SDKs (Updated & Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .animate-pop {
+            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .animate-shake {
+            animation: shake 0.5s;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <h1>Comprehensive Quiz App</h1>
-    </header>
-    <main class="quiz-container">
-        <div id="quiz"></div>
-        <button id="submit">Submit Quiz</button>
-        <div id="results"></div>
-    </main>
-    <footer>
-        <p>© 2024 Quiz App. All rights reserved.</p>
-    </footer>
-    <script src="script.js"></script>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- Global Variables ---
+        // We declare these globally so they are accessible to components, 
+        // but we initialize them in the startApp function to ensure Firebase is loaded first.
+        let auth;
+        let db;
+        let appId;
+
+        // --- Default Data ---
+        const DEFAULT_QUESTIONS = [
+            {
+                question: "Who is known as the Father of the Indian Nation?",
+                answers: { a: "Jawaharlal Nehru", b: "Subhas Chandra Bose", c: "Mahatma Gandhi" },
+                correctAnswer: "c",
+                explanation: "Mahatma Gandhi led India's independence movement."
+            },
+            {
+                question: "What is the capital of Uttar Pradesh?",
+                answers: { a: "Kanpur", b: "Lucknow", c: "Varanasi" },
+                correctAnswer: "b",
+                explanation: "Lucknow is the capital city of Uttar Pradesh."
+            },
+            {
+                question: "Which river is known as the 'Sorrow of Bihar'?",
+                answers: { a: "Ganges", b: "Kosi", c: "Yamuna" },
+                correctAnswer: "b",
+                explanation: "The Kosi River causes frequent flooding."
+            },
+            {
+                question: "What is the shortcut key to copy text?",
+                answers: { a: "Ctrl + V", b: "Ctrl + X", c: "Ctrl + C" },
+                correctAnswer: "c",
+                explanation: "Ctrl + C copies text to the clipboard."
+            },
+            {
+                question: "Which is the largest planet in our solar system?",
+                answers: { a: "Earth", b: "Jupiter", c: "Saturn" },
+                correctAnswer: "b",
+                explanation: "Jupiter is the largest planet."
+            }
+        ];
+
+        // --- Icon Component ---
+        const Icon = ({ name, size = 24, className }) => {
+            const ref = useRef(null);
+
+            useEffect(() => {
+                if (ref.current) {
+                    ref.current.innerHTML = `<i data-lucide="${name}"></i>`;
+                    lucide.createIcons({
+                        root: ref.current,
+                        attrs: {
+                            width: size,
+                            height: size,
+                            class: className
+                        }
+                    });
+                }
+            }, [name, size, className]);
+
+            return <span ref={ref} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} />;
+        };
+
+        // --- Components ---
+
+        const AdminLogin = ({ onLogin, onBack }) => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (username === 'admin' && password === 'Trace@#1234567890') {
+                    onLogin();
+                } else {
+                    setError('Invalid Credentials');
+                    setTimeout(() => setError(''), 2000);
+                }
+            };
+
+            return (
+                <div className="max-w-md mx-auto w-full p-8 glass-panel rounded-3xl shadow-2xl animate-pop text-center mt-10">
+                    <div className="mb-6 flex justify-center text-indigo-600">
+                        <div className="bg-indigo-100 p-4 rounded-full">
+                            <Icon name="lock" size={40} />
+                        </div>
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-800 mb-6">Admin Access</h2>
+                    
+                    <form onSubmit={handleSubmit} className="space-y-4 text-left">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Username</label>
+                            <input 
+                                type="text"
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-indigo-300 outline-none transition"
+                                placeholder="Enter username"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Password</label>
+                            <input 
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full p-3 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-indigo-300 outline-none transition"
+                                placeholder="Enter password"
+                                required
+                            />
+                        </div>
+                        
+                        {error && (
+                            <div className="text-red-500 text-sm font-semibold text-center animate-shake bg-red-50 py-2 rounded">
+                                {error}
+                            </div>
+                        )}
+
+                        <button 
+                            type="submit" 
+                            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition transform hover:scale-105 mt-2"
+                        >
+                            Login
+                        </button>
+                    </form>
+
+                    <button onClick={onBack} className="mt-6 text-gray-500 hover:text-gray-700 text-sm font-medium flex items-center justify-center gap-1 w-full">
+                        <Icon name="arrow-left" size={16} /> Back to Menu
+                    </button>
+                </div>
+            );
+        };
+
+        const AdminPanel = ({ user, onBack }) => {
+            const [questions, setQuestions] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [newQ, setNewQ] = useState({
+                question: "",
+                answers: { a: "", b: "", c: "" },
+                correctAnswer: "a",
+                explanation: ""
+            });
+            const [isSaving, setIsSaving] = useState(false);
+
+            useEffect(() => {
+                if (!user || !db) return;
+                const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions')
+                    .onSnapshot(snapshot => {
+                        const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setQuestions(fetched);
+                        setLoading(false);
+                    }, error => console.error("Error fetching questions:", error));
+                return () => unsubscribe();
+            }, [user]);
+
+            const handleAdd = async (e) => {
+                e.preventDefault();
+                setIsSaving(true);
+                try {
+                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions').add(newQ);
+                    setNewQ({
+                        question: "",
+                        answers: { a: "", b: "", c: "" },
+                        correctAnswer: "a",
+                        explanation: ""
+                    });
+                    alert("Question added successfully!");
+                } catch (err) {
+                    console.error(err);
+                    alert("Error adding question.");
+                }
+                setIsSaving(false);
+            };
+
+            const handleDelete = async (id) => {
+                if (confirm("Are you sure you want to delete this question?")) {
+                    try {
+                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions').doc(id).delete();
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+            };
+
+            const seedDefaults = async () => {
+                if (!confirm("This will add the default questions to the database. Continue?")) return;
+                setIsSaving(true);
+                const batch = db.batch();
+                const collectionRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions');
+                
+                DEFAULT_QUESTIONS.forEach(q => {
+                    const docRef = collectionRef.doc();
+                    batch.set(docRef, q);
+                });
+
+                try {
+                    await batch.commit();
+                    alert("Default questions added!");
+                } catch (err) {
+                    console.error(err);
+                    alert("Failed to seed defaults.");
+                }
+                setIsSaving(false);
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto p-6 glass-panel rounded-2xl shadow-2xl animate-pop text-gray-800 h-full overflow-y-auto">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-indigo-700 flex items-center gap-2">
+                            <Icon name="settings" /> Admin Dashboard
+                        </h2>
+                        <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition">
+                            Back to Menu
+                        </button>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-8">
+                        {/* Add New Question Form */}
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
+                            <h3 className="font-bold text-lg mb-4 text-indigo-600">Add New Question</h3>
+                            <form onSubmit={handleAdd} className="space-y-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Question Text</label>
+                                    <textarea 
+                                        required
+                                        className="w-full p-2 border rounded bg-gray-50 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+                                        value={newQ.question}
+                                        onChange={e => setNewQ({...newQ, question: e.target.value})}
+                                        placeholder="e.g. What is the capital of France?"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 gap-2">
+                                    {['a', 'b', 'c'].map(key => (
+                                        <div key={key} className="flex items-center gap-2">
+                                            <span className="font-bold text-indigo-400 uppercase w-4">{key}</span>
+                                            <input 
+                                                required
+                                                className="flex-1 p-2 border rounded bg-gray-50 text-sm"
+                                                value={newQ.answers[key]}
+                                                onChange={e => setNewQ({...newQ, answers: {...newQ.answers, [key]: e.target.value}})}
+                                                placeholder={`Option ${key.toUpperCase()}`}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Correct Answer</label>
+                                        <select 
+                                            className="w-full p-2 border rounded bg-gray-50"
+                                            value={newQ.correctAnswer}
+                                            onChange={e => setNewQ({...newQ, correctAnswer: e.target.value})}
+                                        >
+                                            <option value="a">Option A</option>
+                                            <option value="b">Option B</option>
+                                            <option value="c">Option C</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Explanation</label>
+                                        <input 
+                                            className="w-full p-2 border rounded bg-gray-50"
+                                            value={newQ.explanation}
+                                            onChange={e => setNewQ({...newQ, explanation: e.target.value})}
+                                            placeholder="Why is it correct?"
+                                        />
+                                    </div>
+                                </div>
+                                <button 
+                                    type="submit" 
+                                    disabled={isSaving}
+                                    className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold shadow-lg shadow-indigo-200"
+                                >
+                                    {isSaving ? "Saving..." : "Add Question"}
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* Existing Questions List */}
+                        <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 h-[500px] flex flex-col">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold text-lg text-gray-700">Database ({questions.length})</h3>
+                                {questions.length === 0 && (
+                                    <button onClick={seedDefaults} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">
+                                        Load Defaults
+                                    </button>
+                                )}
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                                {loading ? <p>Loading...</p> : questions.length === 0 ? <p className="text-gray-500 italic">No questions found. Add one!</p> : (
+                                    questions.map(q => (
+                                        <div key={q.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-indigo-400 group relative">
+                                            <p className="font-semibold text-sm text-gray-800">{q.question}</p>
+                                            <p className="text-xs text-gray-500 mt-1">Ans: {q.correctAnswer.toUpperCase()}</p>
+                                            <button 
+                                                onClick={() => handleDelete(q.id)}
+                                                className="absolute top-2 right-2 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"
+                                            >
+                                                <Icon name="trash-2" size={16} />
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Game = ({ user, onExit }) => {
+            const [questions, setQuestions] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [score, setScore] = useState(0);
+            const [streak, setStreak] = useState(0);
+            const [gameState, setGameState] = useState('loading'); // loading, playing, feedback, finished
+            const [selected, setSelected] = useState(null);
+            const [timer, setTimer] = useState(15);
+            const [maxStreak, setMaxStreak] = useState(0);
+
+            // Fetch questions on mount
+            useEffect(() => {
+                if (!user || !db) return;
+                const fetchQuestions = async () => {
+                    const snapshot = await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions').get();
+                    let data = snapshot.docs.map(d => d.data());
+                    
+                    // Fallback to defaults if DB is empty so the game is always playable
+                    if (data.length === 0) {
+                        data = DEFAULT_QUESTIONS;
+                    }
+
+                    // Shuffle
+                    for (let i = data.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [data[i], data[j]] = [data[j], data[i]];
+                    }
+                    setQuestions(data);
+                    setGameState('playing');
+                };
+                fetchQuestions();
+            }, [user]);
+
+            // Timer Logic
+            useEffect(() => {
+                if (gameState !== 'playing') return;
+                if (timer <= 0) {
+                    handleAnswer(null); // Time out
+                    return;
+                }
+                const interval = setInterval(() => setTimer(t => t - 1), 1000);
+                return () => clearInterval(interval);
+            }, [timer, gameState]);
+
+            // Streak tracking
+            useEffect(() => {
+                if (streak > maxStreak) setMaxStreak(streak);
+            }, [streak]);
+
+            const handleAnswer = (choiceKey) => {
+                setGameState('feedback');
+                setSelected(choiceKey);
+                
+                const currentQ = questions[currentIndex];
+                const isCorrect = choiceKey === currentQ.correctAnswer;
+                
+                if (isCorrect) {
+                    const multiplier = 1 + (streak * 0.1); // 1.1x, 1.2x etc.
+                    const points = Math.round(100 * multiplier) + (timer * 2); // Speed bonus
+                    setScore(s => s + points);
+                    setStreak(s => s + 1);
+                    
+                    // Mini confetti for streaks
+                    if (streak > 1) {
+                        confetti({
+                            particleCount: 30 * (streak > 5 ? 2 : 1),
+                            spread: 50,
+                            origin: { y: 0.7 }
+                        });
+                    }
+                } else {
+                    setStreak(0);
+                }
+
+                // Wait then next question
+                setTimeout(() => {
+                    if (currentIndex < questions.length - 1) {
+                        setCurrentIndex(i => i + 1);
+                        setTimer(15);
+                        setGameState('playing');
+                        setSelected(null);
+                    } else {
+                        setGameState('finished');
+                        confetti({
+                            particleCount: 150,
+                            spread: 70,
+                            origin: { y: 0.6 }
+                        });
+                    }
+                }, 2500); // 2.5s to read explanation
+            };
+
+            if (gameState === 'loading') return <div className="text-white text-2xl font-bold text-center mt-20 animate-pulse">Loading Quiz...</div>;
+
+            if (gameState === 'finished') {
+                return (
+                    <div className="max-w-md mx-auto p-8 glass-panel rounded-3xl shadow-2xl text-center animate-pop mt-10">
+                        <div className="text-6xl mb-4">🏆</div>
+                        <h2 className="text-3xl font-extrabold text-indigo-800 mb-2">Quiz Complete!</h2>
+                        <p className="text-gray-600 mb-6">Great effort!</p>
+                        
+                        <div className="bg-indigo-50 rounded-xl p-6 mb-6">
+                            <div className="grid grid-cols-2 gap-4 text-center">
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase">Total Score</p>
+                                    <p className="text-3xl font-bold text-indigo-600">{score}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-gray-400 uppercase">Best Streak</p>
+                                    <p className="text-3xl font-bold text-orange-500">{maxStreak}🔥</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button onClick={onExit} className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold shadow-lg hover:scale-105 transition transform">
+                            Back to Menu
+                        </button>
+                    </div>
+                );
+            }
+
+            const currentQ = questions[currentIndex];
+            const progress = ((currentIndex + 1) / questions.length) * 100;
+            const streakColor = streak > 2 ? "text-orange-500 animate-pulse" : "text-gray-400";
+
+            return (
+                <div className="max-w-2xl mx-auto w-full">
+                    {/* Header Stats */}
+                    <div className="flex justify-between items-end mb-4 px-2 text-white">
+                        <div>
+                            <p className="text-sm opacity-80">Question {currentIndex + 1}/{questions.length}</p>
+                            <div className="flex items-center gap-2">
+                                <span className={`font-bold text-xl flex items-center gap-1 ${streak > 0 ? 'text-yellow-300' : ''}`}>
+                                    {streak}x Streak <Icon name="flame" size={20} className={streak > 0 ? "fill-yellow-300" : "text-transparent"} />
+                                </span>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-sm opacity-80">Score</p>
+                            <p className="text-3xl font-bold">{score}</p>
+                        </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="h-2 bg-black/20 rounded-full mb-6 overflow-hidden">
+                        <div className="h-full bg-white/90 transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
+                    </div>
+
+                    {/* Question Card */}
+                    <div className="glass-panel rounded-3xl p-6 md:p-8 shadow-2xl animate-pop relative overflow-hidden">
+                        
+                        {/* Timer Bar */}
+                        <div className="absolute top-0 left-0 h-1 bg-indigo-500 transition-all duration-1000 ease-linear" style={{ width: `${(timer/15)*100}%` }}></div>
+
+                        <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-6 leading-snug">
+                            {currentQ.question}
+                        </h2>
+
+                        <div className="space-y-3">
+                            {Object.keys(currentQ.answers).map((key) => {
+                                const isSelected = selected === key;
+                                const isCorrect = key === currentQ.correctAnswer;
+                                const showCorrect = gameState === 'feedback' && isCorrect;
+                                const showWrong = gameState === 'feedback' && isSelected && !isCorrect;
+
+                                let btnClass = "w-full p-4 rounded-xl text-left border-2 transition-all duration-200 relative flex items-center justify-between group ";
+                                
+                                if (gameState === 'playing') {
+                                    btnClass += "border-gray-100 hover:border-indigo-300 hover:bg-indigo-50 cursor-pointer bg-white";
+                                } else {
+                                    if (showCorrect) btnClass += "border-green-500 bg-green-50 text-green-800 shadow-green-200 shadow-lg scale-[1.02] z-10";
+                                    else if (showWrong) btnClass += "border-red-500 bg-red-50 text-red-800 opacity-80";
+                                    else btnClass += "border-gray-100 bg-gray-50 opacity-50 grayscale";
+                                }
+
+                                return (
+                                    <button 
+                                        key={key}
+                                        disabled={gameState !== 'playing'}
+                                        onClick={() => handleAnswer(key)}
+                                        className={btnClass}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                                                showCorrect ? 'bg-green-200 text-green-700' : 
+                                                showWrong ? 'bg-red-200 text-red-700' : 
+                                                'bg-gray-200 text-gray-600 group-hover:bg-indigo-200 group-hover:text-indigo-700'
+                                            }`}>
+                                                {key.toUpperCase()}
+                                            </span>
+                                            <span className="font-medium">{currentQ.answers[key]}</span>
+                                        </div>
+                                        {showCorrect && <Icon name="check-circle" className="text-green-600" />}
+                                        {showWrong && <Icon name="x-circle" className="text-red-600" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Explanation Overlay */}
+                        {gameState === 'feedback' && (
+                            <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100 animate-pop">
+                                <div className="flex items-start gap-3">
+                                    <div className="bg-blue-200 p-2 rounded-full text-blue-700 mt-1">
+                                        <Icon name="info" size={16} />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-blue-800 mb-1">Did you know?</p>
+                                        <p className="text-sm text-blue-900">{currentQ.explanation}</p>
+                                        <div className="text-xs text-blue-500 mt-2 font-semibold uppercase tracking-wider">Next question in 2s...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const MainMenu = ({ onStart, onAdmin }) => {
+            return (
+                <div className="text-center text-white animate-pop mt-12 px-4 w-full max-w-4xl relative">
+                    {/* Admin Button - Top Right */}
+                    <div className="absolute top-0 right-4">
+                         <button 
+                            onClick={onAdmin}
+                            className="p-3 text-white/70 hover:text-white hover:bg-white/20 rounded-full transition-all"
+                            title="Admin Panel"
+                        >
+                            <Icon name="settings" size={24} />
+                        </button>
+                    </div>
+
+                    <div className="mb-8 mt-12 relative inline-block">
+                        <div className="absolute inset-0 bg-white opacity-20 blur-xl rounded-full animate-pulse"></div>
+                        <Icon name="brain-circuit" size={80} className="relative z-10 text-yellow-300 drop-shadow-lg" />
+                    </div>
+                    
+                    <h1 className="text-5xl md:text-6xl font-extrabold mb-4 tracking-tight drop-shadow-md">
+                        Quiz Master <span className="text-yellow-300">Ultimate</span>
+                    </h1>
+                    <p className="text-lg md:text-xl opacity-90 mb-10 max-w-lg mx-auto font-light">
+                        Test your knowledge, build your streak, and challenge your friends in the ultimate trivia experience.
+                    </p>
+
+                    <div className="flex flex-col gap-4 max-w-xs mx-auto">
+                        <button 
+                            onClick={onStart}
+                            className="py-4 px-8 bg-white text-indigo-600 rounded-2xl font-bold text-xl shadow-xl hover:scale-105 hover:bg-yellow-50 transition transform flex items-center justify-center gap-2"
+                        >
+                            <Icon name="play" className="fill-indigo-600" /> Play Now
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [view, setView] = useState('menu'); // menu, game, admin
+            const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+
+            useEffect(() => {
+                const initAuth = async () => {
+                    // We rely on the global 'auth' variable being initialized in startApp
+                    if (!auth) return;
+
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await auth.signInWithCustomToken(__initial_auth_token);
+                    } else {
+                        await auth.signInAnonymously();
+                    }
+                };
+                initAuth();
+                if (auth) {
+                    return auth.onAuthStateChanged(setUser);
+                }
+            }, []);
+
+            const handleAdminAccess = () => {
+                setView('admin');
+            };
+
+            return (
+                <div className="min-h-screen w-full flex flex-col items-center py-10">
+                    {view === 'menu' && <MainMenu onStart={() => setView('game')} onAdmin={handleAdminAccess} />}
+                    {view === 'game' && <Game user={user} onExit={() => setView('menu')} />}
+                    
+                    {/* Admin Logic: Show Login if not logged in, else Panel */}
+                    {view === 'admin' && !isAdminLoggedIn && (
+                        <AdminLogin 
+                            onLogin={() => setIsAdminLoggedIn(true)} 
+                            onBack={() => setView('menu')} 
+                        />
+                    )}
+                    {view === 'admin' && isAdminLoggedIn && (
+                        <AdminPanel 
+                            user={user} 
+                            onBack={() => setView('menu')} 
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        // --- Bootstrap Logic (Fixes ReferenceError) ---
+        // This ensures that Firebase scripts are fully loaded before we attempt to access the 'firebase' global.
+        const startApp = () => {
+            if (typeof firebase === 'undefined' || typeof __firebase_config === 'undefined') {
+                // Retry if scripts haven't loaded yet or config is missing
+                setTimeout(startApp, 50);
+                return;
+            }
+
+            try {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                
+                // Initialize globals here
+                auth = firebase.auth();
+                db = firebase.firestore();
+                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(<App />);
+            } catch (error) {
+                console.error("Initialization Error:", error);
+                document.getElementById('root').innerHTML = `<div style="color:white;text-align:center;padding:20px;">Error loading app. Please refresh.</div>`;
+            }
+        };
+
+        startApp();
+    </script>
 </body>
 </html>
