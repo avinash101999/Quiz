@@ -21,11 +21,6 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Firebase SDKs (Updated & Compat) -->
-    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap');
         
@@ -64,42 +59,40 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
-
-        // --- Global Variables ---
-        // We declare these globally so they are accessible to components, 
-        // but we initialize them in the startApp function to ensure Firebase is loaded first.
-        let auth;
-        let db;
-        let appId;
+        const { useState, useEffect, useRef } = React;
 
         // --- Default Data ---
         const DEFAULT_QUESTIONS = [
             {
+                id: 1,
                 question: "Who is known as the Father of the Indian Nation?",
                 answers: { a: "Jawaharlal Nehru", b: "Subhas Chandra Bose", c: "Mahatma Gandhi" },
                 correctAnswer: "c",
                 explanation: "Mahatma Gandhi led India's independence movement."
             },
             {
+                id: 2,
                 question: "What is the capital of Uttar Pradesh?",
                 answers: { a: "Kanpur", b: "Lucknow", c: "Varanasi" },
                 correctAnswer: "b",
                 explanation: "Lucknow is the capital city of Uttar Pradesh."
             },
             {
+                id: 3,
                 question: "Which river is known as the 'Sorrow of Bihar'?",
                 answers: { a: "Ganges", b: "Kosi", c: "Yamuna" },
                 correctAnswer: "b",
                 explanation: "The Kosi River causes frequent flooding."
             },
             {
+                id: 4,
                 question: "What is the shortcut key to copy text?",
                 answers: { a: "Ctrl + V", b: "Ctrl + X", c: "Ctrl + C" },
                 correctAnswer: "c",
                 explanation: "Ctrl + C copies text to the clipboard."
             },
             {
+                id: 5,
                 question: "Which is the largest planet in our solar system?",
                 answers: { a: "Earth", b: "Jupiter", c: "Saturn" },
                 correctAnswer: "b",
@@ -137,6 +130,7 @@
 
             const handleSubmit = (e) => {
                 e.preventDefault();
+                // Simple client-side check
                 if (username === 'admin' && password === 'Trace@#1234567890') {
                     onLogin();
                 } else {
@@ -199,76 +193,45 @@
             );
         };
 
-        const AdminPanel = ({ user, onBack }) => {
-            const [questions, setQuestions] = useState([]);
-            const [loading, setLoading] = useState(true);
+        const AdminPanel = ({ questions, setQuestions, onBack }) => {
             const [newQ, setNewQ] = useState({
                 question: "",
                 answers: { a: "", b: "", c: "" },
                 correctAnswer: "a",
                 explanation: ""
             });
-            const [isSaving, setIsSaving] = useState(false);
 
-            useEffect(() => {
-                if (!user || !db) return;
-                const unsubscribe = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions')
-                    .onSnapshot(snapshot => {
-                        const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                        setQuestions(fetched);
-                        setLoading(false);
-                    }, error => console.error("Error fetching questions:", error));
-                return () => unsubscribe();
-            }, [user]);
-
-            const handleAdd = async (e) => {
+            const handleAdd = (e) => {
                 e.preventDefault();
-                setIsSaving(true);
-                try {
-                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions').add(newQ);
-                    setNewQ({
-                        question: "",
-                        answers: { a: "", b: "", c: "" },
-                        correctAnswer: "a",
-                        explanation: ""
-                    });
-                    alert("Question added successfully!");
-                } catch (err) {
-                    console.error(err);
-                    alert("Error adding question.");
-                }
-                setIsSaving(false);
-            };
-
-            const handleDelete = async (id) => {
-                if (confirm("Are you sure you want to delete this question?")) {
-                    try {
-                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions').doc(id).delete();
-                    } catch (err) {
-                        console.error(err);
-                    }
-                }
-            };
-
-            const seedDefaults = async () => {
-                if (!confirm("This will add the default questions to the database. Continue?")) return;
-                setIsSaving(true);
-                const batch = db.batch();
-                const collectionRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions');
+                const questionToAdd = {
+                    ...newQ,
+                    id: Date.now() // Unique ID based on timestamp
+                };
                 
-                DEFAULT_QUESTIONS.forEach(q => {
-                    const docRef = collectionRef.doc();
-                    batch.set(docRef, q);
+                const updatedQuestions = [...questions, questionToAdd];
+                setQuestions(updatedQuestions);
+                
+                // Reset form
+                setNewQ({
+                    question: "",
+                    answers: { a: "", b: "", c: "" },
+                    correctAnswer: "a",
+                    explanation: ""
                 });
+                alert("Question added successfully!");
+            };
 
-                try {
-                    await batch.commit();
-                    alert("Default questions added!");
-                } catch (err) {
-                    console.error(err);
-                    alert("Failed to seed defaults.");
+            const handleDelete = (id) => {
+                if (confirm("Are you sure you want to delete this question?")) {
+                    const updatedQuestions = questions.filter(q => q.id !== id);
+                    setQuestions(updatedQuestions);
                 }
-                setIsSaving(false);
+            };
+
+            const handleReset = () => {
+                if (confirm("This will reset all questions to default. Are you sure?")) {
+                    setQuestions(DEFAULT_QUESTIONS);
+                }
             };
 
             return (
@@ -336,10 +299,9 @@
                                 </div>
                                 <button 
                                     type="submit" 
-                                    disabled={isSaving}
                                     className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold shadow-lg shadow-indigo-200"
                                 >
-                                    {isSaving ? "Saving..." : "Add Question"}
+                                    Add Question
                                 </button>
                             </form>
                         </div>
@@ -348,17 +310,15 @@
                         <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 h-[500px] flex flex-col">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="font-bold text-lg text-gray-700">Database ({questions.length})</h3>
-                                {questions.length === 0 && (
-                                    <button onClick={seedDefaults} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">
-                                        Load Defaults
-                                    </button>
-                                )}
+                                <button onClick={handleReset} className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">
+                                    Reset to Default
+                                </button>
                             </div>
                             
                             <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                                {loading ? <p>Loading...</p> : questions.length === 0 ? <p className="text-gray-500 italic">No questions found. Add one!</p> : (
-                                    questions.map(q => (
-                                        <div key={q.id} className="bg-white p-3 rounded shadow-sm border-l-4 border-indigo-400 group relative">
+                                {questions.length === 0 ? <p className="text-gray-500 italic">No questions found. Add one!</p> : (
+                                    questions.map((q, idx) => (
+                                        <div key={q.id || idx} className="bg-white p-3 rounded shadow-sm border-l-4 border-indigo-400 group relative">
                                             <p className="font-semibold text-sm text-gray-800">{q.question}</p>
                                             <p className="text-xs text-gray-500 mt-1">Ans: {q.correctAnswer.toUpperCase()}</p>
                                             <button 
@@ -377,8 +337,8 @@
             );
         };
 
-        const Game = ({ user, onExit }) => {
-            const [questions, setQuestions] = useState([]);
+        const Game = ({ questions, onExit }) => {
+            const [gameQuestions, setGameQuestions] = useState([]);
             const [currentIndex, setCurrentIndex] = useState(0);
             const [score, setScore] = useState(0);
             const [streak, setStreak] = useState(0);
@@ -387,28 +347,21 @@
             const [timer, setTimer] = useState(15);
             const [maxStreak, setMaxStreak] = useState(0);
 
-            // Fetch questions on mount
+            // Initialize Game
             useEffect(() => {
-                if (!user || !db) return;
-                const fetchQuestions = async () => {
-                    const snapshot = await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('quiz_questions').get();
-                    let data = snapshot.docs.map(d => d.data());
-                    
-                    // Fallback to defaults if DB is empty so the game is always playable
-                    if (data.length === 0) {
-                        data = DEFAULT_QUESTIONS;
-                    }
+                // Clone and shuffle questions so main list isn't affected
+                let data = [...questions];
+                if (data.length === 0) data = [...DEFAULT_QUESTIONS];
 
-                    // Shuffle
-                    for (let i = data.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [data[i], data[j]] = [data[j], data[i]];
-                    }
-                    setQuestions(data);
-                    setGameState('playing');
-                };
-                fetchQuestions();
-            }, [user]);
+                // Fisher-Yates Shuffle
+                for (let i = data.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [data[i], data[j]] = [data[j], data[i]];
+                }
+                
+                setGameQuestions(data);
+                setGameState('playing');
+            }, [questions]);
 
             // Timer Logic
             useEffect(() => {
@@ -430,7 +383,7 @@
                 setGameState('feedback');
                 setSelected(choiceKey);
                 
-                const currentQ = questions[currentIndex];
+                const currentQ = gameQuestions[currentIndex];
                 const isCorrect = choiceKey === currentQ.correctAnswer;
                 
                 if (isCorrect) {
@@ -453,7 +406,7 @@
 
                 // Wait then next question
                 setTimeout(() => {
-                    if (currentIndex < questions.length - 1) {
+                    if (currentIndex < gameQuestions.length - 1) {
                         setCurrentIndex(i => i + 1);
                         setTimer(15);
                         setGameState('playing');
@@ -498,16 +451,19 @@
                 );
             }
 
-            const currentQ = questions[currentIndex];
-            const progress = ((currentIndex + 1) / questions.length) * 100;
-            const streakColor = streak > 2 ? "text-orange-500 animate-pulse" : "text-gray-400";
+            const currentQ = gameQuestions[currentIndex];
+            
+            // Guard clause if something goes wrong with question loading
+            if (!currentQ) return null;
+
+            const progress = ((currentIndex + 1) / gameQuestions.length) * 100;
 
             return (
                 <div className="max-w-2xl mx-auto w-full">
                     {/* Header Stats */}
                     <div className="flex justify-between items-end mb-4 px-2 text-white">
                         <div>
-                            <p className="text-sm opacity-80">Question {currentIndex + 1}/{questions.length}</p>
+                            <p className="text-sm opacity-80">Question {currentIndex + 1}/{gameQuestions.length}</p>
                             <div className="flex items-center gap-2">
                                 <span className={`font-bold text-xl flex items-center gap-1 ${streak > 0 ? 'text-yellow-300' : ''}`}>
                                     {streak}x Streak <Icon name="flame" size={20} className={streak > 0 ? "fill-yellow-300" : "text-transparent"} />
@@ -635,26 +591,26 @@
         };
 
         const App = () => {
-            const [user, setUser] = useState(null);
             const [view, setView] = useState('menu'); // menu, game, admin
             const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+            const [questions, setQuestions] = useState([]);
 
+            // Initialize Questions from Local Storage
             useEffect(() => {
-                const initAuth = async () => {
-                    // We rely on the global 'auth' variable being initialized in startApp
-                    if (!auth) return;
-
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await auth.signInWithCustomToken(__initial_auth_token);
-                    } else {
-                        await auth.signInAnonymously();
-                    }
-                };
-                initAuth();
-                if (auth) {
-                    return auth.onAuthStateChanged(setUser);
+                const storedQuestions = localStorage.getItem('quiz_app_questions');
+                if (storedQuestions) {
+                    setQuestions(JSON.parse(storedQuestions));
+                } else {
+                    setQuestions(DEFAULT_QUESTIONS);
                 }
             }, []);
+
+            // Save to Local Storage whenever questions change
+            useEffect(() => {
+                if (questions.length > 0) {
+                    localStorage.setItem('quiz_app_questions', JSON.stringify(questions));
+                }
+            }, [questions]);
 
             const handleAdminAccess = () => {
                 setView('admin');
@@ -663,9 +619,15 @@
             return (
                 <div className="min-h-screen w-full flex flex-col items-center py-10">
                     {view === 'menu' && <MainMenu onStart={() => setView('game')} onAdmin={handleAdminAccess} />}
-                    {view === 'game' && <Game user={user} onExit={() => setView('menu')} />}
                     
-                    {/* Admin Logic: Show Login if not logged in, else Panel */}
+                    {view === 'game' && (
+                        <Game 
+                            questions={questions} 
+                            onExit={() => setView('menu')} 
+                        />
+                    )}
+                    
+                    {/* Admin Logic */}
                     {view === 'admin' && !isAdminLoggedIn && (
                         <AdminLogin 
                             onLogin={() => setIsAdminLoggedIn(true)} 
@@ -674,7 +636,8 @@
                     )}
                     {view === 'admin' && isAdminLoggedIn && (
                         <AdminPanel 
-                            user={user} 
+                            questions={questions}
+                            setQuestions={setQuestions}
                             onBack={() => setView('menu')} 
                         />
                     )}
@@ -682,35 +645,8 @@
             );
         };
 
-        // --- Bootstrap Logic (Fixes ReferenceError) ---
-        // This ensures that Firebase scripts are fully loaded before we attempt to access the 'firebase' global.
-        const startApp = () => {
-            if (typeof firebase === 'undefined' || typeof __firebase_config === 'undefined') {
-                // Retry if scripts haven't loaded yet or config is missing
-                setTimeout(startApp, 50);
-                return;
-            }
-
-            try {
-                const firebaseConfig = JSON.parse(__firebase_config);
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(firebaseConfig);
-                }
-                
-                // Initialize globals here
-                auth = firebase.auth();
-                db = firebase.firestore();
-                appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-                const root = ReactDOM.createRoot(document.getElementById('root'));
-                root.render(<App />);
-            } catch (error) {
-                console.error("Initialization Error:", error);
-                document.getElementById('root').innerHTML = `<div style="color:white;text-align:center;padding:20px;">Error loading app. Please refresh.</div>`;
-            }
-        };
-
-        startApp();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
